@@ -1,0 +1,21 @@
+#!/bin/bash
+# arch-update for the tray: after the first "Proceed with update?" prompt and
+# the Arch news, every later question is answered with its default.
+#
+# The package's library directory is mirrored with symlinks and only update.sh
+# is swapped for ~/.local/share/arch-update-auto/update.sh. The mirror is
+# rebuilt on every run, so files added or removed by a cachy-update release are
+# picked up automatically.
+
+set -e
+sys_lib="/usr/share/arch-update/lib"
+auto="${HOME}/.local/share/arch-update-auto"
+lib="${XDG_RUNTIME_DIR:-/tmp}/arch-update-auto/lib"
+
+rm -rf "${lib}"
+mkdir -p "${lib}"
+ln -s "${sys_lib}"/* "${lib}/"
+ln -sf "${auto}/update.sh" "${lib}/update.sh"
+set +e
+
+ARCH_UPDATE_LIBDIR="${lib}" exec /usr/bin/arch-update "$@"

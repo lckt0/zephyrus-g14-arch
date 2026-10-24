@@ -230,9 +230,12 @@ monitoring tools) - in Integrated mode nothing can.
   uses the firmware `dgpu_disable` switch instead.
 - After every resume, PCIe hotplug re-announces the card ("Card present" in
   the journal). Harmless: no driver binds and it drops back to D3cold.
-- `nvidia-powerd.service` is enabled by the NVIDIA packaging; in Integrated
-  mode it fails at boot (`start-limit-hit`) because the module is not loaded.
-  Harmless; `sudo systemctl disable nvidia-powerd` silences it.
+- `nvidia-powerd.service` (Dynamic Boost) is disabled on this machine. It
+  failed on every boot: in Integrated mode because the module is not loaded
+  (`start-limit-hit`), and with the module loaded it exits with
+  `ERROR! Allocate Root client failed 0x59`; Dynamic Boost does not work with
+  this dGPU/firmware combination. `sudo systemctl disable nvidia-powerd`; see also the
+  `disable_nvidia_powerd_on_battery` note in section 3.
 
 **NVIDIA runtime PM for Hybrid mode.** When the dGPU is in use, these keep it
 able to sleep:
@@ -628,15 +631,16 @@ systemctl --user restart wireplumber
 `amixer -c "$(alc285-card)" get Master`; `systemctl status alsa-card-volume-cap`.
 **Revert.** Disable the service, delete the files, restart WirePlumber.
 
-**Not shipped: a local WirePlumber `alsa.lua` override.** The reference machine
-also has `~/.local/share/wireplumber/scripts/monitors/alsa.lua`, a patched copy
-of WirePlumber's ALSA monitor that fixed "ghost" duplicate sinks piling up on
-every card profile change (old nodes were released but not destroyed and kept
-the PCM busy). Half of that fix went upstream in 0.5.17; the other half
-(`request_destroy` in `removeNode`) did not. The copy is based on 0.5.17, while
-0.5.18 is installed, so it shadows newer upstream code. It is left out of this
-repo on purpose; if you hit duplicate sinks after profile switches, compare with
-the current upstream file before reusing the idea.
+**Dropped: a local WirePlumber `alsa.lua` override.** For a while
+`~/.local/share/wireplumber/scripts/monitors/alsa.lua` held a patched copy of
+WirePlumber's ALSA monitor against "ghost" duplicate sinks piling up on every
+card profile change (old nodes were released but not destroyed and kept the
+PCM busy). Half of that fix went upstream in 0.5.17; the other half
+(`request_destroy` in `removeNode`) did not. The copy was based on 0.5.17 and,
+once 0.5.18 was installed, shadowed that release's fixes, so it was removed
+and the packaged monitor is used. If duplicate sinks show up again after
+profile switches, compare with the current upstream file before reviving the
+idea.
 
 ## 11. Wi-Fi and Bluetooth (AX210)
 
@@ -803,7 +807,9 @@ or disabled; the system was checked to confirm it.
 | **`amdgpu.dcfeaturemask` to enable PSR** | Has no effect on DCN 3.5 (not read for PSR), and PSR-SU is hard-disabled in the driver. |
 | **`KWIN_DRM_USE_COLOR_PIPELINE=1`** | Made it impossible to put video on an overlay plane; five days of "overlays don't work on AMD" turned out to be this variable. |
 | **VRR "Always" as default** | Overlay windows vanish on cursor movement (driver bug, fix not applied), and with Replay it costs power. |
+| **`nvidia-powerd.service`** (NVIDIA Dynamic Boost) | Failed on every boot (`start-limit-hit` in Integrated mode, `Allocate Root client failed 0x59` with the module loaded); Dynamic Boost does not work with this dGPU/firmware. Disabled. |
 | **asusd toggling nvidia-powerd** (`disable_nvidia_powerd_on_battery: true`) | Restarting nvidia-powerd on AC after resume loaded the NVIDIA module past the blacklist and hung it. |
 | **Patched KWin 6.7.5** (direct-scanout CRTC degamma handling, cursor async-commit throttling) | Superseded by KWin 6.8; the version pinning of the patched package also blocked Plasma updates. The current KWin patch is in [04](04-custom-packages.md#kwin-lapidary). |
 | **Wi-Fi / NVMe runtime PM forced to `auto`** | No measurable gain. |
+| **Local WirePlumber `alsa.lua` override** | Based on 0.5.17 and shadowed the fixes in 0.5.18 (section 10). Removed; the packaged ALSA monitor is used. |
 | **EasyEffects with DeepFilterNet on the microphone** | The highest wakeup source on the system, but closing it saved only ~0.12 W. Not part of the power setup; the package is still installed. |

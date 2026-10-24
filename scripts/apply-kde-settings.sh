@@ -121,11 +121,14 @@ w kwinrc Wayland EnablePrimarySelection false    # no middle-click paste
 w kwinrc Desktops Number 3
 w kwinrc Desktops Rows 1
 
-# Force the Iris colour scheme on every title bar, so apps with their own
-# colour scheme still get the black title bar. Only if Iris is installed.
+# Force the Iris colour scheme on every title bar: apps with their own colour
+# scheme still get Iris title bars, and the grey inactive title bar survives
+# Plasma rewriting [Colors:Header][Inactive] in kdeglobals. Same rule as the
+# iris-desktop installer writes, so the two do not stack. Only if Iris is
+# installed.
 if [[ -f $DATA/color-schemes/Iris.colors || -f /usr/share/color-schemes/Iris.colors ]]; then
-    RULE=g14-iris-titlebar
-    w kwinrulesrc "$RULE" Description "Black title bar (Iris)"
+    RULE=iris-titlebar
+    w kwinrulesrc "$RULE" Description "Iris title bar"
     w kwinrulesrc "$RULE" decocolor Iris
     w kwinrulesrc "$RULE" decocolorrule 2       # 2 = Force
     order=$(kreadconfig6 --file "$CFG/kwinrulesrc" --group General --key Order 2>/dev/null || true)

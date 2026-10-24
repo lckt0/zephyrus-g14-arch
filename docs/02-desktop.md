@@ -217,9 +217,10 @@ systemctl enable nvidia-suspend nvidia-resume nvidia-hibernate supergfxd
 the module options) the driver saves VRAM to disk on suspend through these units;
 without them resume from sleep was not clean on this machine.
 
-`nvidia-powerd.service` is also enabled (Dynamic Boost: shifts power between CPU and
-dGPU when the dGPU is in use). How it interacts with Integrated mode and ASUS's
-battery settings is in [docs/03](03-g14-hardware-and-power.md); read that before enabling it.
+`nvidia-powerd.service` (Dynamic Boost: shifts power between CPU and dGPU) is **not**
+enabled: on this machine it failed on every boot and Dynamic Boost does not work with
+this dGPU/firmware ([docs/03](03-g14-hardware-and-power.md)). If the NVIDIA packaging
+enabled it, `sudo systemctl disable nvidia-powerd`.
 
 Not in the initramfs: the NVIDIA modules load from the root filesystem; early KMS and
 the boot splash use amdgpu (01, section 13). `nouveau` is blacklisted.
@@ -293,7 +294,6 @@ for each:
 | `power-profiles-daemon.service` | power profiles for Plasma |
 | `supergfxd.service` | GPU mode switching (Integrated by default) |
 | `nvidia-suspend.service`, `nvidia-resume.service`, `nvidia-hibernate.service` | save/restore VRAM around sleep (section 7) |
-| `nvidia-powerd.service` | NVIDIA Dynamic Boost (section 7, read [docs/03](03-g14-hardware-and-power.md)) |
 | `alsa-card-volume-cap.service` | **[GA403GM]** caps the speaker amplifier volume; local unit from [docs/03](03-g14-hardware-and-power.md) |
 | `ufw.service` | firewall rules at boot |
 | `cups.socket`, `cups.path`, `cups.service` | printing, socket-activated |

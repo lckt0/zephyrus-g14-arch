@@ -249,19 +249,24 @@ so it is not part of `home/`.
   never bluish greys.
 - Active vs. inactive: the active item is black and the inactive item's
   **background** turns `#1C1C1C` (28,28,28); the text is not dimmed. This is
-  the rule used for browser tabs. The alternative colour scheme
+  the rule used for browser tabs and window title bars. The Iris colour
+  scheme sets it in `[Colors:Header][Inactive]` (and `[WM]`): inactive title
+  bars are `#1C1C1C` with the same white text as the active one. The
+  alternative colour scheme
   `home/.local/share/color-schemes/BreezeTrueBlack.colors` (Breeze Dark on
-  pure black, neutral greys) applies it to inactive title bars too; select it
-  in System Settings > Colours if you do not use Iris.
-- The Iris colour scheme as currently shipped keeps both active and inactive
-  title bars black and greys the inactive title text instead. If you want the
-  background rule for title bars as well, set
-  `inactiveBackground=28,28,28` in the `[WM]` group of
-  `~/.local/share/color-schemes/Iris.colors`.
-- A KWin window rule ("Black title bar (Iris)", written by
-  `apply-kde-settings.sh` only when Iris is installed) forces the Iris
-  colour scheme onto every title bar, so applications that set their own
-  colour scheme still get the black title bar.
+  pure black, neutral greys) does the same; select it in System Settings >
+  Colours if you do not use Iris.
+- A KWin window rule ("Iris title bar", group `iris-titlebar`; written by the
+  iris-desktop installer, and by `apply-kde-settings.sh` when Iris is
+  installed) forces the Iris colour scheme onto every title bar. Without it
+  the inactive title bar stays black: when Plasma copies a scheme into
+  `kdeglobals` it rebuilds `[Colors:Header][Inactive]` from `[Colors:Window]`,
+  and the rule makes KWin read the scheme file itself. It also keeps the Iris
+  title bar on applications that set their own colour scheme.
+- KWin caches decoration palettes per scheme file and does not notice edits
+  to it. After changing `Iris.colors`, point the rule at another scheme,
+  run `qdbus6 org.kde.KWin /KWin reconfigure`, then point it back and
+  reconfigure again (or log out and in).
 
 ### Panel and desktop
 
@@ -483,8 +488,24 @@ a terminal window.
 - Enable the periodic check and the tray applet:
   `systemctl --user enable --now arch-update.timer` and
   `arch-update --tray --enable`.
+- `.local/bin/arch-update-tray` + `.local/share/arch-update-auto/update.sh`:
+  the terminal variant, for when you would rather watch arch-update itself
+  than use the popup. It asks the first "Proceed with update?" question and
+  shows the Arch news as usual; every later question (pacman/AUR/Flatpak
+  confirmations, cache cleanup, orphans, services to restart, reboot) is
+  printed and answered with its default. It works by building a symlink
+  mirror of `/usr/share/arch-update/lib` in `$XDG_RUNTIME_DIR` on each run,
+  replacing only `update.sh`, and pointing `ARCH_UPDATE_LIBDIR` at it, so the
+  package itself is not modified and new library files from a cachy-update
+  release are picked up. Run it in a terminal (`konsole -e arch-update-tray`),
+  or make the tray icon use it: the applet opens `arch-update.desktop`, and a
+  copy in `~/.local/share/applications` takes precedence over the packaged
+  one, so set `Exec=konsole -e arch-update-tray` there (it is
+  `Exec=arch-update-gui` when the popup is used).
 
-Revert: delete the SVGs and run `kbuildsycoca6`.
+Revert: delete the SVGs and run `kbuildsycoca6`; delete
+`~/.local/bin/arch-update-tray`, `~/.local/share/arch-update-auto/` and any
+`~/.local/share/applications/arch-update.desktop` you created.
 
 ## 15. File indexing
 
