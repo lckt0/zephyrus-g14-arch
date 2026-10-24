@@ -46,7 +46,7 @@ can differ - check before copying.
 | dGPU | NVIDIA GeForce RTX 5060 Laptop (GB206M, `10de:2d59`) | at `0000:64:00.0`, HDA function `64:00.1`. **The HDMI port is wired to the dGPU.** |
 | Panel | Samsung ATNA40HQ14, 14" OLED, 2880x1800, 30-120 Hz VRR, 10-bit | supports AMD Panel Replay and HDR (the latter only visible with an EDID fix, section 9) |
 | Audio | Realtek ALC285 (subsystem `1043:1044`, `0000:65:00.6`) + 2x Cirrus CS35L56 amplifiers (I2C) | needs a quirk on kernels before 7.3 (section 10) |
-| Wireless | Intel AX210 (Wi-Fi 6E + Bluetooth, USB `8087:0032`) | |
+| Wireless | Intel AX210NGW (Wi-Fi 6E + Bluetooth, USB `8087:0032`) | **not stock**: replaces the factory MediaTek MT7925 card (section 11) |
 | SSD | KIOXIA BG6 NVMe | |
 | Keyboard | ASUS N-Key (USB `0b05:19b6`) with single-zone white backlight, Slash LED bar on the lid | |
 
@@ -643,6 +643,11 @@ profile switches, compare with the current upstream file before reviving the
 idea.
 
 ## 11. Wi-Fi and Bluetooth (AX210)
+
+The GA403GM ships with a MediaTek MT7925 card (Wi-Fi 7, 2x2, Bluetooth 5.4). It did
+not work well with the Linux drivers, so it was replaced with an Intel AX210NGW
+(Wi-Fi 6E + Bluetooth 5.3, M.2 2230), which `iwlwifi`/`btusb` support out of the box.
+Everything below is about the AX210; on a stock unit with the MT7925 it does not apply.
 
 - **Bluetooth autosuspend off**:
   [`system/etc/modprobe.d/btusb-no-autosuspend.conf`](../system/etc/modprobe.d/btusb-no-autosuspend.conf)

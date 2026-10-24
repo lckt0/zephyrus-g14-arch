@@ -10,7 +10,8 @@ GPU switching) is in the [docs/03](03-g14-hardware-and-power.md) guide, and the 
 in [04-custom-packages.md](04-custom-packages.md).
 
 Tested on: **ROG Zephyrus G14 GA403GM** (Ryzen AI 9 465, Radeon 880M iGPU, RTX 5060
-Laptop dGPU, 32 GB RAM, KIOXIA BG6 1 TB NVMe, Intel AX210 Wi-Fi), BIOS GA403GM.302.
+Laptop dGPU, 32 GB RAM, KIOXIA BG6 1 TB NVMe, Intel AX210NGW Wi-Fi in place of the
+stock MediaTek MT7925), BIOS GA403GM.302.
 Other GA403 variants are very likely the same for everything in this file; the parts
 that depend on this exact model are marked **[GA403GM]**.
 
@@ -129,7 +130,8 @@ Confirm UEFI mode (must print `64`):
 cat /sys/firmware/efi/fw_platform_size
 ```
 
-Wi-Fi (Intel AX210, works out of the box) with `iwctl`:
+Wi-Fi (Intel AX210, works out of the box; the stock MediaTek MT7925 was replaced, see
+[docs/03 section 11](03-g14-hardware-and-power.md#11-wi-fi-and-bluetooth-ax210)) with `iwctl`:
 
 ```sh
 iwctl
