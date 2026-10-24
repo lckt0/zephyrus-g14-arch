@@ -17,11 +17,13 @@ Schedule a full device repaint on the layer whenever its assignment changes.
 The cost is one full repaint on the (rare) frames where layers are reassigned.
 
 Tested on an ASUS ROG Zephyrus G14 (GA403GM, Radeon 880M / DCN 3.5) with
-KWin 6.8.0; kwin master and 6.8.1 still have the unpatched code path.
+KWin 6.8.0. This copy is rebased onto KWin 6.8.1, which reorganised the cursor
+timer code around the second insertion point; the change itself is identical.
+Built against KWin 6.8.1 (Arch 6.8.1-2 sources).
 ---
 --- a/src/compositor.cpp
 +++ b/src/compositor.cpp
-@@ -658,6 +658,12 @@
+@@ -663,6 +663,12 @@
          const bool isCursor = qobject_cast<CursorItem *>(item) != nullptr;
          const bool isScene = item == kwinApp()->scene()->containerItem();
          if (isScene) {
@@ -34,12 +36,12 @@ KWin 6.8.0; kwin master and 6.8.1 still have the unpatched code path.
              sceneView->setLayer(layer);
              underlay = false;
              layers.push_back(LayerData{
-@@ -716,6 +722,8 @@
-             } else {
+@@ -733,6 +739,8 @@
                  view = std::make_unique<ItemView>(sceneView, item, logicalOutput, backendOutput, layer);
+                 timers.erase(layer);
              }
 +            // same as for the scene: the layer may still show the previous item's buffer
 +            layer->addDeviceRepaint(Region::infinite());
-         }
-         layers.push_back(LayerData{
-             .view = view.get(),
+         } else {
+             const auto it = timers.find(layer);
+             if (it != timers.end()) {

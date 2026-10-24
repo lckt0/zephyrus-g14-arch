@@ -13,7 +13,7 @@ packages are included.
 | --- | --- | --- |
 | `linux-lapidary` (+ `-headers`) 7.2.7-1 | [`packages/linux-lapidary/`](../packages/linux-lapidary/) | installed, default boot entry |
 | `plymouth-lapidary` 26.134.222-2 | [`packages/plymouth-lapidary/`](../packages/plymouth-lapidary/) | installed |
-| `kwin` with a layer repaint fix | [`packages/kwin-lapidary/`](../packages/kwin-lapidary/) | **not installed right now**: the stock CachyOS `kwin` 6.8.1 replaced it on update (see below) |
+| `kwin` 6.8.1-2.2 with a layer repaint fix | [`packages/kwin-lapidary/`](../packages/kwin-lapidary/) | installed |
 
 Other locally maintained software has its own repository and is not repeated here:
 
@@ -271,17 +271,15 @@ sudo mkinitcpio -P
 
 ## kwin-lapidary
 
-**What.** Arch's `kwin` package with one patch,
+**What.** Arch's `kwin` 6.8.1-2 package (the same sources CachyOS rebuilds as
+6.8.1-2.1, including Arch's two NVIDIA fixes) with one extra patch,
 `0001-compositor-repaint-reassigned-layers.patch`. The package keeps the stock
-name `kwin` and stock dependencies (pkgrel `1.2`), so it is a drop-in
-replacement.
+name `kwin` and stock dependencies, so it is a drop-in replacement.
 
-**Status.** Built and used with KWin 6.8.0. On 2026-10-22 a regular update
-replaced it with CachyOS's stock `kwin` 6.8.1-1.1, which is what runs now. The
-bug is **not** fixed in 6.8.1 (the code path is unchanged there and on master),
-so the symptom below is expected to be back on the reference machine.
-[`rebased-6.8.1/`](../packages/kwin-lapidary/rebased-6.8.1/) has the patch
-rebased onto 6.8.1; it applies cleanly but has not been built or run yet.
+**Status.** Installed as `kwin` 6.8.1-2.2. An earlier 6.8.0 build was replaced
+by a regular repository update on 2026-10-22; the bug is still present in 6.8.1
+(the code path is unchanged there and on master), so the patch was rebased and
+the package rebuilt. A pacman hook (below) now warns when that happens again.
 
 **Problem.** With overlay planes enabled (`KWIN_USE_OVERLAYS=1`, [03 section 8](03-g14-hardware-and-power.md#8-display-kwin-overlay-planes-and-direct-scanout)),
 KWin moves the whole scene between output layers, for example when a notification
@@ -301,34 +299,65 @@ only shows when the scene itself moves between planes, i.e. in a multi-plane
 layout), so few users hit it. It is a plain bug in KWin; it has not been reported
 upstream yet.
 
+### Version numbering
+
+`pkgrel` is the repository build's pkgrel plus `.1`: CachyOS ships Arch's
+`6.8.1-2` as `6.8.1-2.1`, so the local build is `6.8.1-2.2`. That sorts above the
+build it replaces, but below the next repository release (`6.8.1-3`,
+`6.8.1-3.1` or `6.8.2-1`), so normal updates are never blocked. The flip side is
+that the next KWin update replaces the patched package; rebuild then.
+
 ### Build and install
 
-The included PKGBUILD is the exact 6.8.0 one that was built. For the KWin version
-currently in the repositories, start from Arch's current packaging instead:
+The included PKGBUILD is the 6.8.1-2.2 one that is installed. It builds with
+`BUILD_TESTING=OFF` like Arch's, so there is no `check()` step.
+
+```sh
+mkdir kwin-build && cd kwin-build
+cp ../zephyrus-g14-arch/packages/kwin-lapidary/{PKGBUILD,0001-compositor-repaint-reassigned-layers.patch} .
+makepkg -s                     # about 8 minutes on this machine
+sudo pacman -U kwin-6.8.1-2.2-*.pkg.tar.zst
+```
+
+Log out and in; KWin cannot be replaced in a running session.
+
+For a newer KWin, start from Arch's current packaging and add the patch:
 
 ```sh
 pkgctl repo clone --protocol=https kwin && cd kwin     # or: git clone https://gitlab.archlinux.org/archlinux/packaging/packages/kwin.git
-cp ../zephyrus-g14-arch/packages/kwin-lapidary/rebased-6.8.1/0001-compositor-repaint-reassigned-layers.patch .
-# in PKGBUILD: add the patch to source=(), add to prepare():
+cp ../zephyrus-g14-arch/packages/kwin-lapidary/0001-compositor-repaint-reassigned-layers.patch .
+# in PKGBUILD: add the patch to source=(), and to the end of prepare():
 #   patch -d $pkgname-$pkgver -p1 < 0001-compositor-repaint-reassigned-layers.patch
-# and bump pkgrel to e.g. 1.2 so it sorts above the repository build
+# set pkgrel to the repository build's pkgrel + .1 (see above), and append
+# " (lapidary: layer repaint fix)" to pkgdesc so the hook below recognises it
 updpkgsums
 makepkg -s
-sudo pacman -U kwin-*.pkg.tar.zst
 ```
 
-Log out and in (KWin cannot be replaced in a running session).
+If the patch no longer applies, check `Compositor::setupLayers()` in
+`src/compositor.cpp`; the two `setLayer()` call sites are what it changes.
 
-Because the package is called `kwin`, **the next KWin update from the
-repositories replaces it** - that is exactly what happened here. Either rebuild on
-every KWin update, or hold it with `IgnorePkg = kwin` in `/etc/pacman.conf` (and
-remember to lift that before a Plasma upgrade; KWin must match the rest of
-Plasma).
+### Update warning hook
 
-**Verify.** `pacman -Qi kwin | grep -E 'Version|Description'` shows the local
-pkgrel and "(lapidary: layer repaint fix)". Functional check: with overlays
-enabled, open and close notifications repeatedly while moving the mouse; windows
-must not flash away.
+[`system/etc/pacman.d/hooks/kwin-patch-check.hook`](../system/etc/pacman.d/hooks/kwin-patch-check.hook)
+runs after every transaction that installs or upgrades `kwin`. If the installed
+package's description does not contain "lapidary: layer repaint fix", it prints a
+one-line warning in the pacman output and logs it to the journal
+(`journalctl -t kwin-patch-check`). It changes nothing.
+
+```sh
+sudo install -Dm644 system/etc/pacman.d/hooks/kwin-patch-check.hook /etc/pacman.d/hooks/kwin-patch-check.hook
+```
+
+To keep the patched build through updates instead, hold it with
+`IgnorePkg = kwin` in `/etc/pacman.conf`, and lift that before a Plasma upgrade
+(KWin must match the rest of Plasma).
+
+**Verify.** `pacman -Qi kwin | grep -E 'Version|Description'` shows `6.8.1-2.2`
+and "(lapidary: layer repaint fix)". The running compositor uses it only if it
+was started after the install time shown there (`ps -o lstart= -C kwin_wayland`).
+Functional check: with overlays enabled, open and close
+notifications repeatedly while moving the mouse; windows must not flash away.
 
 **Revert to stock.** `sudo pacman -S kwin`, log out and in.
 

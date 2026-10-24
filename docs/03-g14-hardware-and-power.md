@@ -775,9 +775,9 @@ below ~0.15 W are noise.
 
 Best idle result with the current kernel: **about 3.8 W at 120 Hz**. Video:
 about 6.6-6.8 W in mpv with hardware decoding, about 7.3 W fullscreen in a
-Chromium-based browser. These figures were taken with the patched KWin of the
-time (see [04](04-custom-packages.md#kwin-lapidary)); stock KWin 6.8 should be in
-the same range but has not been re-measured.
+Chromium-based browser. These figures were taken with the patched KWin 6.8.0
+(see [04](04-custom-packages.md#kwin-lapidary)); the current patched 6.8.1 build
+has not been re-measured.
 
 Measurement tips: KDE's automatic brightness (ambient light sensor) pulls the
 backlight back within seconds - disable it before measuring. Use

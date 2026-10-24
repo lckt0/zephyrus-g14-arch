@@ -1,0 +1,14 @@
+# Warn when a repository kwin replaces the locally patched one
+# (packages/kwin-lapidary). The patched build carries
+# "(lapidary: layer repaint fix)" in its description.
+
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = kwin
+
+[Action]
+Description = Checking that kwin carries the layer repaint patch...
+When = PostTransaction
+Exec = /bin/sh -c 'pacman -Qi kwin | grep -q "lapidary: layer repaint fix" && exit 0; m="WARNING: stock kwin replaced the patched kwin (layer repaint fix); rebuild packages/kwin-lapidary"; echo "$m"; logger -t kwin-patch-check -p user.warning "$m"; exit 0'
