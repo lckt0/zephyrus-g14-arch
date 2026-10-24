@@ -1,0 +1,242 @@
+From: lckt0 <lckt0@protonmail.com>
+Date: Tue, 9 Sep 2026 02:00:00 +0300
+Subject: [PATCH v2] drm/amd/display: bound every DMUB wait that disable_timeout unbounds
+
+On ASICs whose dc_debug_options set .disable_timeout - dcn35, dcn36, dcn42 and
+dcn42b - seven waits become unbounded, so the timeout each of them is given is
+dead code and the error handling written for exactly that situation is never
+reached.
+
+Five are in dc_dmub_srv.c. Four share one idiom:
+
+	do {
+		status = dmub_srv_wait_for_*(dmub, MAX_WAIT_US);
+	} while (dc_dmub_srv->ctx->dc->debug.disable_timeout &&
+		 status != DMUB_STATUS_OK);
+
+in dc_dmub_srv_wait_for_pending(), dc_dmub_srv_reg_cmd_list_queue_execute(),
+dc_dmub_srv_fb_cmd_list_queue_execute() and dc_dmub_srv_wait_for_idle(). The
+fifth, in dc_dmub_srv_is_hw_pwr_up(), is written as an if/else instead and
+loops on a 500ms wait with no exit other than success; its DC_ERROR() is
+unreachable whenever the flag is set.
+
+The remaining two are in dcn35_smu_wait_for_response() and
+dcn42_smu_wait_for_response(), where the flag cancels the loop's own counter:
+
+		if (clk_mgr->base.ctx->dc->debug.disable_timeout)
+			max_retries++;
+	} while (max_retries--);
+
+The increment exactly offsets the decrement, so the loop cannot terminate.
+
+Observed on a Ryzen AI 9 465 / Radeon 880M (DCN 3.5) laptop, kernels 7.1.9 and
+7.2.2:
+
+ - In process context, dc_dmub_srv_wait_for_idle() called from
+   dcn20_pipe_control_lock() -> dmub_hw_lock_mgr_cmd() ran for at least 1228
+   seconds in state R while holding the DC lock. The hung-task detector
+   reported an unrelated backlight writer blocked behind that mutex four
+   times, always naming the same owning kworker. No DMUB failure was ever
+   logged, because the loop never left.
+
+ - In dm_vblank_control_workqueue context, the same wait reached from
+   amdgpu_dm_crtc_vblank_control_worker() -> dm_ism_commit_idle_optimization_state()
+   -> dmub_psr_enable() spun long enough to trip the NMI hard lockup detector.
+   The wedged CPU then stopped acknowledging TLB shootdown IPIs and every
+   other CPU piled up in smp_call_function_many_cond(); 27 soft lockups
+   across 15 CPUs followed within 37 seconds and the machine was dead.
+
+That second trace contradicts the assumption recorded when the timeout was
+first disabled - that these waits "happen only at lower interrupt levels" so
+"the risk of taking too long at higher IRQ and causing a system watchdog
+timeout are minimal".
+
+Bound the retries so the existing failure paths are reachable again. The budget
+is expressed as time rather than as an iteration count, because the call sites
+do not share a per-call timeout: 2s covers twenty 100ms waits or four 500ms
+waits. That is far longer than any legitimate DMUB command latency, and short
+enough that a wait performed with interrupts disabled cannot reach the hard
+lockup threshold. For the two SMU loops the fix is simply to stop cancelling
+the counter, which restores the 2000000-retry bound their callers already pass.
+
+This does not address whatever makes DMUB stop responding in the first place;
+it stops that condition from taking the whole system down instead of being
+reported.
+
+Signed-off-by: lckt0 <lckt0@protonmail.com>
+---
+--- a/drivers/gpu/drm/amd/display/dc/clk_mgr/dcn35/dcn35_smu.c
++++ b/drivers/gpu/drm/amd/display/dc/clk_mgr/dcn35/dcn35_smu.c
+@@ -125,9 +125,6 @@
+ 			msleep(delay_us/1000);
+ 		else if (delay_us > 0)
+ 			udelay(delay_us);
+-
+-		if (clk_mgr->base.ctx->dc->debug.disable_timeout)
+-			max_retries++;
+ 	} while (max_retries--);
+ 
+ 	return res_val;
+--- a/drivers/gpu/drm/amd/display/dc/clk_mgr/dcn42/dcn42_smu.c
++++ b/drivers/gpu/drm/amd/display/dc/clk_mgr/dcn42/dcn42_smu.c
+@@ -116,9 +116,6 @@
+ 			msleep(delay_us/1000);
+ 		else if (delay_us > 0)
+ 			udelay(delay_us);
+-
+-		if (clk_mgr->base.ctx->dc->debug.disable_timeout)
+-			max_retries++;
+ 	} while (max_retries--);
+ 
+ 	return res_val;
+--- a/drivers/gpu/drm/amd/display/dc/dc_dmub_srv.c
++++ b/drivers/gpu/drm/amd/display/dc/dc_dmub_srv.c
+@@ -43,6 +43,37 @@
+ 
+ #define MAX_WAIT_US 100000
+ 
++/*
++ * Retry budget for the wait loops below on ASICs whose dc_debug_options set
++ * .disable_timeout (DCN3.5 among them). Without a bound those loops never
++ * terminate once DMUB stops responding: the per-call timeout is ignored and
++ * the error handling that follows each of them is never reached.
++ *
++ * The budget is expressed as time rather than as an iteration count, because
++ * the call sites do not all pass the same per-call timeout. 2s is far longer
++ * than any legitimate DMUB command latency, and short enough that a wait
++ * performed with interrupts disabled cannot reach the NMI hard lockup
++ * threshold.
++ */
++#define TIMEOUT_DISABLED_BUDGET_US 2000000
++#define TIMEOUT_DISABLED_RETRIES(wait_us) (TIMEOUT_DISABLED_BUDGET_US / (wait_us))
++
++#define HW_PWR_UP_WAIT_US 500000
++
++static bool dc_dmub_srv_should_retry_wait(struct dc_dmub_srv *dc_dmub_srv,
++					  enum dmub_status status,
++					  unsigned int *retries,
++					  unsigned int max_retries)
++{
++	if (!dc_dmub_srv->ctx->dc->debug.disable_timeout)
++		return false;
++
++	if (status == DMUB_STATUS_OK)
++		return false;
++
++	return ++(*retries) < max_retries;
++}
++
+ static void dc_dmub_srv_construct(struct dc_dmub_srv *dc_srv, struct dc *dc,
+ 				  struct dmub_srv *dmub)
+ {
+@@ -82,6 +113,7 @@
+ 
+ bool dc_dmub_srv_wait_for_pending(struct dc_dmub_srv *dc_dmub_srv)
+ {
++	unsigned int retries;
+ 	struct dmub_srv *dmub;
+ 	struct dc_context *dc_ctx;
+ 	enum dmub_status status;
+@@ -92,9 +124,11 @@
+ 	dc_ctx = dc_dmub_srv->ctx;
+ 	dmub = dc_dmub_srv->dmub;
+ 
++	retries = 0;
+ 	do {
+ 		status = dmub_srv_wait_for_pending(dmub, MAX_WAIT_US);
+-	} while (dc_dmub_srv->ctx->dc->debug.disable_timeout && status != DMUB_STATUS_OK);
++	} while (dc_dmub_srv_should_retry_wait(dc_dmub_srv, status, &retries,
++					       TIMEOUT_DISABLED_RETRIES(MAX_WAIT_US)));
+ 
+ 	if (status != DMUB_STATUS_OK) {
+ 		DC_ERROR("Error waiting for DMUB idle: status=%d\n", status);
+@@ -148,6 +182,7 @@
+ 		unsigned int count,
+ 		union dmub_rb_cmd *cmd_list)
+ {
++	unsigned int retries;
+ 	struct dc_context *dc_ctx;
+ 	struct dmub_srv *dmub;
+ 	enum dmub_status status = DMUB_STATUS_OK;
+@@ -161,9 +196,11 @@
+ 
+ 	for (i = 0 ; i < count; i++) {
+ 		/* confirm no messages pending */
++		retries = 0;
+ 		do {
+ 			status = dmub_srv_wait_for_idle(dmub, MAX_WAIT_US);
+-		} while (dc_dmub_srv->ctx->dc->debug.disable_timeout && status != DMUB_STATUS_OK);
++		} while (dc_dmub_srv_should_retry_wait(dc_dmub_srv, status, &retries,
++						       TIMEOUT_DISABLED_RETRIES(MAX_WAIT_US)));
+ 
+ 		/* queue command */
+ 		if (status == DMUB_STATUS_OK)
+@@ -190,6 +227,7 @@
+ 		unsigned int count,
+ 		union dmub_rb_cmd *cmd_list)
+ {
++	unsigned int retries;
+ 	struct dc_context *dc_ctx;
+ 	struct dmub_srv *dmub;
+ 	enum dmub_status status;
+@@ -216,9 +254,11 @@
+ 			if (status == DMUB_STATUS_POWER_STATE_D3)
+ 				return false;
+ 
++			retries = 0;
+ 			do {
+ 					status = dmub_srv_wait_for_inbox_free(dmub, MAX_WAIT_US, count - i);
+-			} while (dc_dmub_srv->ctx->dc->debug.disable_timeout && status != DMUB_STATUS_OK);
++			} while (dc_dmub_srv_should_retry_wait(dc_dmub_srv, status, &retries,
++							       TIMEOUT_DISABLED_RETRIES(MAX_WAIT_US)));
+ 
+ 			/* Requeue the command. */
+ 			status = dmub_srv_fb_cmd_queue(dmub, &cmd_list[i]);
+@@ -269,6 +309,7 @@
+ 		enum dm_dmub_wait_type wait_type,
+ 		union dmub_rb_cmd *cmd_list)
+ {
++	unsigned int retries;
+ 	struct dmub_srv *dmub;
+ 	enum dmub_status status;
+ 
+@@ -279,9 +320,11 @@
+ 
+ 	// Wait for DMUB to process command
+ 	if (wait_type != DM_DMUB_WAIT_TYPE_NO_WAIT) {
++		retries = 0;
+ 		do {
+ 			status = dmub_srv_wait_for_idle(dmub, MAX_WAIT_US);
+-		} while (dc_dmub_srv->ctx->dc->debug.disable_timeout && status != DMUB_STATUS_OK);
++		} while (dc_dmub_srv_should_retry_wait(dc_dmub_srv, status, &retries,
++						       TIMEOUT_DISABLED_RETRIES(MAX_WAIT_US)));
+ 
+ 		if (status != DMUB_STATUS_OK) {
+ 			DC_LOG_DEBUG("No reply for DMUB command: status=%d\n", status);
+@@ -1308,16 +1351,16 @@
+ 	dc_ctx = dc_dmub_srv->ctx;
+ 
+ 	if (wait) {
+-		if (dc_dmub_srv->ctx->dc->debug.disable_timeout) {
+-			do {
+-				status = dmub_srv_wait_for_hw_pwr_up(dc_dmub_srv->dmub, 500000);
+-			} while (status != DMUB_STATUS_OK);
+-		} else {
+-			status = dmub_srv_wait_for_hw_pwr_up(dc_dmub_srv->dmub, 500000);
+-			if (status != DMUB_STATUS_OK) {
+-				DC_ERROR("Error querying DMUB hw power up status: error=%d\n", status);
+-				return false;
+-			}
++		unsigned int retries = 0;
++
++		do {
++			status = dmub_srv_wait_for_hw_pwr_up(dc_dmub_srv->dmub, HW_PWR_UP_WAIT_US);
++		} while (dc_dmub_srv_should_retry_wait(dc_dmub_srv, status, &retries,
++						       TIMEOUT_DISABLED_RETRIES(HW_PWR_UP_WAIT_US)));
++
++		if (status != DMUB_STATUS_OK) {
++			DC_ERROR("Error querying DMUB hw power up status: error=%d\n", status);
++			return false;
+ 		}
+ 	} else
+ 		return dmub_srv_is_hw_pwr_up(dc_dmub_srv->dmub);

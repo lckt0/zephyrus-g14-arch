@@ -1,0 +1,14 @@
+# /etc/fstab -- template. Generate yours with `genfstab -U /mnt` and compare.
+# <ROOT-FS-UUID> = UUID of the btrfs filesystem inside /dev/mapper/root
+# <ESP-UUID>     = UUID of the vfat ESP (nvme0n1p1)
+#
+# <file system>         <dir>                  <type> <options>                                                    <dump> <pass>
+UUID=<ROOT-FS-UUID>     /                      btrfs  rw,noatime,compress=zstd:3,ssd,space_cache=v2,subvol=/@      0 0
+UUID=<ROOT-FS-UUID>     /home                  btrfs  rw,noatime,compress=zstd:3,ssd,space_cache=v2,subvol=/@home  0 0
+UUID=<ROOT-FS-UUID>     /var/cache/pacman/pkg  btrfs  rw,noatime,compress=zstd:3,ssd,space_cache=v2,subvol=/@pkg   0 0
+UUID=<ROOT-FS-UUID>     /var/log               btrfs  rw,noatime,compress=zstd:3,ssd,space_cache=v2,subvol=/@log   0 0
+UUID=<ESP-UUID>         /boot                  vfat   rw,relatime,fmask=0077,dmask=0077,codepage=437,iocharset=ascii,shortname=mixed,utf8,errors=remount-ro  0 2
+
+# Swap subvolume: no compression (a swapfile must not be compressed or CoW).
+UUID=<ROOT-FS-UUID>     /swap                  btrfs  rw,noatime,ssd,space_cache=v2,subvol=/@swap                  0 0
+/swap/swapfile          none                   swap   defaults,pri=10                                              0 0

@@ -1,0 +1,21 @@
+[Unit]
+Description=Watch for (and report) DMUB timeouts caught by the linux-lapidary patch
+Documentation=man:journalctl(1)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/dmub-watch
+Restart=on-failure
+RestartSec=10
+# Only reads the journal; never touches hardware or debugfs files.
+StateDirectory=dmub-watch
+ReadWritePaths=%S/dmub-watch
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Notice when the bounded DMUB waits in linux-lapidary kick in, and say so.
+#
+# Why: on the patched kernel a stuck DMUB no longer freezes the machine; the
+# wait times out, an error is logged and the system carries on. That makes the
+# event SILENT. This script makes it visible and saves the surrounding log.
+#
+# NOTE: this deliberately does NOT read debugfs. Reading psr_state,
+# psr_residency or replay_state sends DMUB idle exit/enter commands, which is
+# the worst possible thing to do at the moment of such an event. Only the
+# journal is read.
+
+set -uo pipefail
+
+SIG='Error waiting for DMUB idle: status=|Error querying DMUB hw power up status: error=|DMCUB error - collecting diagnostic data|No reply for DMUB command: status=|Error waiting for INBOX0 HW Lock Ack|hw_done or flip_done timed out|flip_done timed out|SMU response after wait'
+
+OUTDIR="${STATE_DIRECTORY:-${XDG_STATE_HOME:-$HOME/.local/state}/dmub-watch}"
+STAMP="$OUTDIR/.last-event"
+DEBOUNCE=120          # collapse a burst of related lines into one record
+
+mkdir -p "$OUTDIR"
+
+journalctl -k -f -n0 -o short-iso --no-pager 2>/dev/null | while IFS= read -r line; do
+    printf '%s\n' "$line" | grep -qE "$SIG" || continue
+
+    now=$(date +%s)
+    last=$(cat "$STAMP" 2>/dev/null || echo 0)
+    [ $((now - last)) -lt "$DEBOUNCE" ] && continue
+    printf '%s' "$now" > "$STAMP"
+
+    ts=$(date '+%Y%m%d-%H%M%S')
+    f="$OUTDIR/dmub-event-$ts.txt"
+
+    {
+        printf '# DMUB event - %s\n' "$(date -Is)"
+        printf '# kernel: %s\n' "$(uname -r)"
+        printf '# uptime: %s\n\n' "$(uptime -p)"
+        printf '## triggering line\n%s\n\n' "$line"
+        printf '## kernel log, last 5 minutes\n'
+        journalctl -k --since '-5 min' -o short-iso --no-pager
+    } > "$f" 2>&1
+
+    notify-send -u critical -a 'DMUB watch' -i dialog-warning \
+        'DMUB event caught - the machine survived' \
+        "The bounded-wait patch kicked in. On an unpatched kernel this would have been a hard freeze.
+
+Saved: $f
+Summary: dmub-check"
+done

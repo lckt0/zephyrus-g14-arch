@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Power menu — uses KDE's own session manager.
+# (Whether a confirmation dialog appears depends on
+#  System Settings > Session > Desktop Session.)
+set -euo pipefail
+
+declare -A ACTIONS=(
+    ["󰌾  Lock"]="qdbus6 org.freedesktop.ScreenSaver /ScreenSaver Lock"
+    ["󰤄  Sleep"]="systemctl suspend"
+    ["󰗽  Log out"]="qdbus6 org.kde.Shutdown /Shutdown logout"
+    ["󰜉  Restart"]="qdbus6 org.kde.Shutdown /Shutdown logoutAndReboot"
+    ["󰐥  Shut down"]="qdbus6 org.kde.Shutdown /Shutdown logoutAndShutdown"
+)
+ORDER=("󰌾  Lock" "󰤄  Sleep" "󰗽  Log out" "󰜉  Restart" "󰐥  Shut down")
+
+choice="$(printf '%s\n' "${ORDER[@]}" \
+    | rofi -normal-window -dmenu -no-show-icons -i -p "󰐥  Power" -theme-str 'listview { lines: 5; }')"
+
+[[ -z "${choice:-}" ]] && exit 0
+exec ${ACTIONS[$choice]}

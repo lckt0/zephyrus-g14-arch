@@ -1,0 +1,74 @@
+#!/bin/bash
+# stuck-watch - detect stuck background tasks and a dGPU that is awake for no reason.
+#
+# Background: after a resume, nvidia-powerd (started by asusd on AC) ran
+# `modprobe nvidia`, which bypassed the supergfxd blacklist and hung in
+# D state for hours. The dGPU stayed in D0 and idle power was ~8 W higher.
+# This script notices that class of problem within 5 minutes and sends a
+# desktop notification.
+#
+# Checks:
+#   1. processes in D state (uninterruptible sleep) in TWO consecutive runs
+#   2. the NVIDIA card in D0 (awake) while supergfxctl reports Integrated mode
+#   3. "blocked for more than" (hung task) warnings in the kernel log
+#   On battery the current power draw is added to the notification.
+# Usage: stuck-watch          (run by stuck-watch.timer)
+#        stuck-watch --show   (print the state without notifying)
+
+STATE=${XDG_STATE_HOME:-$HOME/.local/state}/stuck-watch
+mkdir -p "$STATE"
+PREVIOUS=$STATE/previous-d.txt
+NOTIFIED=$STATE/notified.txt
+LOG=$STATE/log.txt
+touch "$PREVIOUS" "$NOTIFIED"
+
+findings=()
+
+# 1. D-state processes as "pid comm". Seen in both runs = stuck for at least one interval.
+current=$(ps -eo pid=,stat=,comm= | awk '$2 ~ /^D/ {print $1, $3}' | sort)
+while read -r pid comm; do
+    [ -z "$pid" ] && continue
+    if grep -qx "$pid $comm" "$PREVIOUS"; then
+        age=$(ps -o etime= -p "$pid" 2>/dev/null | tr -d ' ')
+        findings+=("stuck process: $comm (pid $pid, age $age)")
+    fi
+done <<< "$current"
+echo "$current" > "$PREVIOUS"
+
+# 2. dGPU awake in Integrated mode
+mode=$(supergfxctl -g 2>/dev/null)
+for d in /sys/bus/pci/devices/*; do
+    [ "$(cat "$d/vendor" 2>/dev/null)" = 0x10de ] || continue
+    [ "$(cat "$d/class" 2>/dev/null)" = 0x030000 ] || continue
+    pstate=$(cat "$d/power_state" 2>/dev/null)
+    if [ "$mode" = Integrated ] && [ "$pstate" = D0 ]; then
+        findings+=("dGPU $(basename "$d") is in D0 (awake) in Integrated mode")
+    fi
+done
+
+# 3. Kernel hung-task warnings (last 6 minutes)
+hung=$(journalctl -k --since "-6min" --no-pager -q -g "blocked for more than" 2>/dev/null | sed -E 's/.*INFO: //' | sort -u)
+while read -r s; do [ -n "$s" ] && findings+=("kernel: $s"); done <<< "$hung"
+
+# Power draw (only meaningful on battery)
+power=""
+if [ "$(cat /sys/class/power_supply/ACAD/online 2>/dev/null)" = 0 ]; then
+    power=$(awk -v c="$(cat /sys/class/power_supply/BAT1/current_now)" -v v="$(cat /sys/class/power_supply/BAT1/voltage_now)" 'BEGIN{printf "%.1f W", c*v/1e12}')
+fi
+
+if [ "$1" = --show ]; then
+    printf '%s\n' "${findings[@]:-no problems}"; [ -n "$power" ] && echo "battery power: $power"; exit 0
+fi
+
+[ ${#findings[@]} -eq 0 ] && { : > "$NOTIFIED"; exit 0; }
+
+# Do not repeat the same set of findings
+summary=$(printf '%s\n' "${findings[@]}" | sed -E 's/, age [^)]*//' | sort)
+if [ "$summary" != "$(cat "$NOTIFIED")" ]; then
+    echo "$summary" > "$NOTIFIED"
+    text=$(printf '• %s\n' "${findings[@]}")
+    [ -n "$power" ] && text="$text
+Battery power: $power"
+    notify-send -u critical -a "Stuck task watch" -i dialog-warning "Something is stuck in the background" "$text"
+    { echo "== $(date '+%F %T')"; printf '%s\n' "${findings[@]}"; [ -n "$power" ] && echo "power $power"; } >> "$LOG"
+fi

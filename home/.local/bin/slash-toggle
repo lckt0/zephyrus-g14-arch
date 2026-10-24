@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Toggle the ASUS Slash LED (the light bar on the G14 lid) and show the new
+# state in the Plasma OSD. Bound to the Fn+F-key that sends "Launch (3)".
+set -uo pipefail
+
+ICON_ON="dialog-ok"
+ICON_OFF="dialog-cancel"
+
+osd() {
+    local icon="$1" text="$2"
+    # Plasma's own OSD (same look as the volume/brightness popup)
+    if gdbus call --session \
+        --dest org.kde.plasmashell \
+        --object-path /org/kde/osdService \
+        --method org.kde.osdService.showText "$icon" "$text" >/dev/null 2>&1
+    then
+        return 0
+    fi
+    # No Plasma or no answer: fall back to a normal notification
+    notify-send -a "Slash LED" -i "$icon" -t 1500 "$text" >/dev/null 2>&1 || true
+}
+
+if ! command -v asusctl >/dev/null 2>&1; then
+    osd "$ICON_OFF" "asusctl not found"
+    exit 1
+fi
+
+state="$(asusctl slash get 2>/dev/null | grep -i '^Slash LED:')"
+if [[ -z "$state" ]]; then
+    osd "$ICON_OFF" "Could not read Slash LED state"
+    exit 1
+fi
+
+if grep -qi 'disabled' <<<"$state"; then
+    asusctl slash set --enable && osd "$ICON_ON" "Slash LED: on"
+else
+    asusctl slash set --disable && osd "$ICON_OFF" "Slash LED: off"
+fi

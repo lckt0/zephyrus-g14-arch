@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Search the Klipper clipboard history with rofi, put the pick back on the clipboard.
+# History size: System Settings > Clipboard > "History size" (default 20).
+set -euo pipefail
+
+KLIP=(qdbus6 org.kde.klipper /klipper org.kde.klipper.klipper)
+
+items=()
+labels=()
+for i in $(seq 0 99); do
+    item="$("${KLIP[@]}".getClipboardHistoryItem "$i" 2>/dev/null || true)"
+    [[ -z "$item" ]] && break
+    items+=("$item")
+    # display: turn newlines/tabs into spaces, squeeze runs of spaces
+    label="$(printf '%s' "$item" | tr '\n\t' '  ' | sed 's/  */ /g; s/^ //; s/ $//')"
+    labels+=("${label:0:150}")
+done
+
+if [[ ${#items[@]} -eq 0 ]]; then
+    rofi -e "Clipboard history is empty."
+    exit 0
+fi
+
+idx="$(printf '%s\n' "${labels[@]}" \
+    | rofi -normal-window -dmenu -format i -no-show-icons -i -p "  Clipboard")"
+
+[[ -z "${idx:-}" ]] && exit 0
+"${KLIP[@]}".setClipboardContents "${items[$idx]}"

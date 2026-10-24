@@ -1,0 +1,66 @@
+# Fallback GRUB "black" theme.
+# Active item: pure black background; inactive items: #1C1C1C background; text
+# is white in both cases (not dimmed). The selected item is marked by a white
+# bar on the left and bold text. Font: JetBrains Mono (converted with grub-mkfont).
+# Sizes chosen for 2880x1800 (G14 native resolution); positions are relative.
+
+title-text: ""
+desktop-color: "#000000"
+terminal-font: "JetBrains Mono Regular 24"
+message-font: "JetBrains Mono Regular 24"
+message-color: "#FFFFFF"
+message-bg-color: "#000000"
+
++ label {
+  left = 30%
+  top = 50%-305
+  width = 40%
+  height = 48
+  text = "GRUB (fallback)"
+  font = "JetBrains Mono Bold 32"
+  color = "#FFFFFF"
+  align = "left"
+}
+
++ boot_menu {
+  left = 30%
+  top = 50%-305+72
+  width = 40%
+  height = 420
+  item_font = "JetBrains Mono Regular 32"
+  selected_item_font = "JetBrains Mono Bold 32"
+  item_color = "#FFFFFF"
+  selected_item_color = "#FFFFFF"
+  item_height = 72
+  item_padding = 0
+  item_spacing = 12
+  icon_width = 0
+  icon_height = 0
+  item_icon_space = 0
+  item_pixmap_style = "item_*.png"
+  selected_item_pixmap_style = "select_*.png"
+  scrollbar = false
+}
+
++ label {
+  id = "__timeout__"
+  left = 30%
+  top = 50%-305+72+420+32
+  width = 40%
+  height = 40
+  text = "Booting automatically in %d s"
+  font = "JetBrains Mono Regular 24"
+  color = "#FFFFFF"
+  align = "left"
+}
+
++ label {
+  left = 30%
+  top = 50%-305+72+420+32+48
+  width = 40%
+  height = 40
+  text = "↑ ↓  select    Enter  boot"
+  font = "JetBrains Mono Regular 24"
+  color = "#FFFFFF"
+  align = "left"
+}

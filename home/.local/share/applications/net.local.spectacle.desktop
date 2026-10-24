@@ -1,0 +1,7 @@
+[Desktop Entry]
+Exec=spectacle -bac
+Name=Spectacle - Capture Window
+NoDisplay=true
+StartupNotify=false
+Type=Application
+X-KDE-GlobalAccel-CommandShortcut=true

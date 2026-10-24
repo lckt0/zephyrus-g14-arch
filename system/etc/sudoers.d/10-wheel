@@ -1,0 +1,3 @@
+# Members of the wheel group may run any command (with their password).
+# Install with: install -m 0440 10-wheel /etc/sudoers.d/ && visudo -c
+%wheel ALL=(ALL:ALL) ALL

@@ -1,0 +1,6 @@
+[Unit]
+Description=Stuck task and awake-dGPU watcher
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/stuck-watch

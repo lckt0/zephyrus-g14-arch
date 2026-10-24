@@ -1,0 +1,12 @@
+[Unit]
+Description=ALC285 headphone/speaker port switch fix (ROG Zephyrus G14)
+After=pipewire.service wireplumber.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/alc285-port-watch
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

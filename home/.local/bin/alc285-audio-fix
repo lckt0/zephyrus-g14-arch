@@ -1,0 +1,36 @@
+#!/bin/bash
+# Set the ALC285 mixer controls for speakers or headphones (ROG Zephyrus G14).
+#   alc285-audio-fix speakers | headphones
+#
+# The card index is resolved from the PCI address, not hard-coded: when the
+# dGPU is powered off its HDMI audio function disappears and the analog card's
+# index shifts. alc285-card is installed with the system files (see docs/03).
+CARD=$(/usr/local/bin/alc285-card 5) || {
+    echo "ALC285 card not found" >&2
+    exit 1
+}
+SINK="${ALC285_SINK:-alsa_output.pci-0000_65_00.6.analog-stereo}"
+
+fix_speakers() {
+    amixer -c "$CARD" set 'Headphone' mute
+    amixer -c "$CARD" set 'Speaker' unmute
+    amixer -c "$CARD" set 'Bass Speaker' unmute
+    amixer -c "$CARD" set 'Master' 100%
+    amixer -c "$CARD" set 'AMP1 Speaker' 100%
+    amixer -c "$CARD" set 'AMP2 Speaker' 100%
+    amixer -c "$CARD" set 'Speaker' 100%
+    pactl set-sink-port "$SINK" analog-output-speaker
+}
+
+fix_headphones() {
+    amixer -c "$CARD" set 'Speaker' mute
+    amixer -c "$CARD" set 'Bass Speaker' mute
+    amixer -c "$CARD" set 'Headphone' unmute
+    amixer -c "$CARD" set 'Headphone' 100%
+}
+
+case "${1:-}" in
+    speakers)   fix_speakers ;;
+    headphones) fix_headphones ;;
+    *) echo "usage: $(basename "$0") speakers|headphones" >&2; exit 2 ;;
+esac

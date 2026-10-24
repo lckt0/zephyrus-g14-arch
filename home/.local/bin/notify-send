@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# notify-send wrapper: give notifications that would never time out a normal
+# timeout instead.
+#
+# Plasma (libnotificationmanager) makes a notification persistent in two cases:
+#   1. expire-time = 0 (-t 0)
+#   2. urgency = critical: setUrgency() forces the timeout to 0, and a -t
+#      value is ignored.
+# This wrapper turns both into normal urgency with Plasma's default timeout
+# (System Settings > Notifications, popup timeout). A positive -t is kept.
+# Expired notifications stay in the history.
+#
+# For a really persistent notification: NOTIFY_SEND_PERSISTENT=1 notify-send ...
+
+real=/usr/bin/notify-send
+
+[[ ${NOTIFY_SEND_PERSISTENT:-0} == 1 ]] && exec "$real" "$@"
+
+urgency='' expire=''
+args=()
+while (($#)); do
+    case $1 in
+        --) args+=("$@"); break ;;
+        -u|--urgency)       urgency=${2-}; shift 2 || shift ;;
+        --urgency=*)        urgency=${1#*=}; shift ;;
+        -u?*)               urgency=${1#-u}; shift ;;
+        -t|--expire-time)   expire=${2-}; shift 2 || shift ;;
+        --expire-time=*)    expire=${1#*=}; shift ;;
+        -t?*)               expire=${1#-t}; shift ;;
+        # Other options that take an argument: keep the argument with them
+        -[aicrhA]|--app-name|--icon|--category|--replace-id|--hint|--action)
+            args+=("$1" "${2-}"); shift 2 || shift ;;
+        *) args+=("$1"); shift ;;
+    esac
+done
+
+if [[ $urgency == critical || $urgency == 2 ]]; then
+    urgency=normal
+    [[ $expire == 0 ]] && expire=''
+elif [[ $expire == 0 ]]; then
+    expire=''
+fi
+
+[[ -n $urgency ]] && args=(-u "$urgency" "${args[@]}")
+[[ -n $expire ]] && args=(-t "$expire" "${args[@]}")
+
+exec "$real" "${args[@]}"

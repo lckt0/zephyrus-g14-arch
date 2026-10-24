@@ -1,0 +1,35 @@
+From: lckt0 <lckt0@protonmail.com>
+Subject: [PATCH] drm/amd/display: use parsed AMD VSDB for eDP Replay detection
+
+amdgpu_dm_update_freesync_caps() reads the AMD VSDB into vsdb_info via
+get_amd_vsdb(), but then tests a separate, zero-initialised vsdb_did that
+is never filled. replay_mode therefore always stays 0 and Panel Replay is
+never enabled, even on panels whose VSDB advertises it (Samsung
+ATNA40HQ14: feature caps 0x5b, DPCD 0x379/0x37A populated, ALPM AUX-wake
+and Adaptive-Sync SDP supported; debugfs reports "Sink support: no").
+
+Test the structure that was actually populated, as mainline does.
+
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -14119,7 +14119,6 @@
+ 	struct dc_sink *sink;
+ 	struct amdgpu_device *adev = drm_to_adev(connector->dev);
+ 	struct amdgpu_hdmi_vsdb_info vsdb_info = {0};
+-	struct amdgpu_hdmi_vsdb_info vsdb_did = {0};
+ 	struct drm_hdmi_vrr_cap hdmi_vrr = {0};
+ 	struct dpcd_caps dpcd_caps = {0};
+ 	const struct edid *edid;
+@@ -14190,9 +14189,9 @@
+ 
+ 		/* eDP */
+ 		get_amd_vsdb(amdgpu_dm_connector, &vsdb_info);
+-		if (vsdb_did.replay_mode) {
+-			amdgpu_dm_connector->vsdb_info.replay_mode = vsdb_did.replay_mode;
+-			amdgpu_dm_connector->vsdb_info.amd_vsdb_version = vsdb_did.amd_vsdb_version;
++		if (vsdb_info.replay_mode) {
++			amdgpu_dm_connector->vsdb_info.replay_mode = vsdb_info.replay_mode;
++			amdgpu_dm_connector->vsdb_info.amd_vsdb_version = vsdb_info.amd_vsdb_version;
+ 			amdgpu_dm_connector->as_type = ADAPTIVE_SYNC_TYPE_EDP;
+ 		}
+ 

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Restart PowerDevil if brightness control hangs, then check that it answers.
+#
+# Why this can be needed: PowerDevil uses libddcutil for external monitor
+# brightness. If the user can access the I2C buses, real I2C transactions
+# start, and the lock held during them can block PowerDevil's main thread;
+# brightness keys and KDE's brightness D-Bus calls then time out.
+#
+# The permanent fix is to keep the user OUT of the `i2c` group and/or set
+# POWERDEVIL_NO_DDCUTIL=1 (see ~/.config/environment.d). This script is the
+# quick recovery until the next login.
+set -euo pipefail
+echo "Restarting PowerDevil..."
+systemctl --user restart plasma-powerdevil.service
+sleep 4
+if timeout 8 busctl --user call org.kde.Solid.PowerManagement \
+     /org/kde/Solid/PowerManagement/Actions/BrightnessControl \
+     org.kde.Solid.PowerManagement.Actions.BrightnessControl brightness >/dev/null 2>&1; then
+  echo "OK, brightness control answers."
+else
+  echo "Still not answering. Log out and back in." >&2
+  exit 1
+fi

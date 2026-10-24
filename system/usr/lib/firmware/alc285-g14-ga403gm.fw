@@ -1,0 +1,35 @@
+# HDA "patch" firmware - ROG Zephyrus G14 GA403GM (ALC285, SSID 1043:1044)
+#
+# Purpose: apply exactly the same fixup chain as upstream commit 140fe610af60
+# "ALSA: hda/realtek: Fix speakers on ASUS ROG Zephyrus G14 GA403UM" (7.3-rc)
+# without building a kernel:
+#   ALC285_FIXUP_ASUS_GA403U_HEADSET_MIC  (pin 0x19=0x03a11050, 0x1b=0x03a11c30)
+#     -> ALC285_FIXUP_ASUS_GA403U_I2C_SPEAKER2_TO_DAC1 (0x17 connection list = {0x02})
+#       -> ALC285_FIXUP_ASUS_GA403U (no-op for vendor 0x10ec0285)
+#
+# WARNING: the loader's line buffer is 128 bytes (sysfs.c get_line_from_fw);
+# a line longer than 127 characters stops parsing of the rest of the file.
+# Keep lines short.
+#
+# How it works (checked against the 7.2.7 source):
+#   sound/hda/common/sysfs.c snd_hda_load_patch(): a "[codec]" line
+#     "vendor_id subsystem_id address" selects ONLY the matching codec; if none
+#     matches, the following [model] lines are ignored (no-op on HDMI codecs).
+#   sound/hda/controllers/intel.c azx_probe_continue(): the patch is loaded
+#     BEFORE the codec drivers bind (azx_codec_configure).
+#   sound/hda/common/auto_parser.c snd_hda_pick_fixup(): if modelname is
+#     "XXXX:YYYY", that SSID is looked up in alc269_fixup_tbl ("alias SSID").
+#     1043:1b13 -> "ASUS U41SV/GA403U" -> ALC285_FIXUP_ASUS_GA403U_HEADSET_MIC.
+#   The CS35L56 amplifier binding does not depend on the quirk:
+#     alc269_probe() -> find_cirrus_companion_amps() finds ACPI CSC3556 anyway.
+#
+# Installed at:  /usr/lib/firmware/alc285-g14-ga403gm.fw
+# Enabled by:    /etc/modprobe.d/60-alc285-g14-quirk.conf (patch=...)
+# Once the 1043:1044 quirk is built into the kernel (7.3+) this file is
+# redundant (harmless: it selects the same fixup) and should be removed.
+
+[codec]
+0x10ec0285 0x10431044 0
+
+[model]
+1043:1b13

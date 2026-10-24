@@ -1,0 +1,19 @@
+#!/bin/bash
+# Pin the ALC285 hardware mixer to full scale at boot, so the speaker/headphone
+# switch fix has the headroom it expects.
+
+set -u
+
+card=$(/usr/local/bin/alc285-card 20) || {
+    echo "ALC285 card did not appear within 20s" >&2
+    exit 1
+}
+
+status=0
+for ctl in 'Master' 'AMP1 Speaker' 'AMP2 Speaker'; do
+    if ! amixer -c "$card" set "$ctl" 100% >/dev/null; then
+        echo "could not set '$ctl' on card $card" >&2
+        status=1
+    fi
+done
+exit "$status"

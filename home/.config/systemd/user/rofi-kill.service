@@ -1,0 +1,10 @@
+[Unit]
+Description=Close the running rofi instance (helper for the rofi-autoclose KWin script)
+# Why a service: KWin scripts cannot run commands, they can only make D-Bus
+# calls. The script starts this unit with StartUnit, so only the rofi process
+# gets SIGTERM and the application rofi just launched is not affected.
+
+[Service]
+Type=oneshot
+# "-" prefix: when no rofi is running pkill exits 1; do not mark the unit failed.
+ExecStart=-/usr/bin/pkill -x rofi

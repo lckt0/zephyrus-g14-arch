@@ -1,0 +1,8 @@
+# /etc/crypttab
+# The root volume is unlocked in the initramfs: "x-initrd.attach" makes mkinitcpio's
+# sd-encrypt hook copy this line into the image (the older /etc/crypttab.initramfs
+# file is no longer needed). tpm2-device=auto lets systemd-cryptsetup try the TPM2
+# token first and fall back to the passphrase.
+#
+# <name>  <device>                 <password>  <options>
+root      UUID=<LUKS-UUID>         none        tpm2-device=auto,x-initrd.attach

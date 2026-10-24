@@ -1,0 +1,40 @@
+/* rofi main configuration
+ * modes: drun (application launcher)
+ * extra scripts are invoked by their own shortcuts: rofi-clipboard, rofi-power
+ * NOTE: rofi's "window" mode does not work on KDE Wayland — KWin does not
+ *       expose the wlr-foreign-toplevel-management protocol.
+ */
+configuration {
+    modes:                      "drun";
+    font:                       "JetBrains Mono 11";
+
+    /* --- search behavior: KRunner-like --- */
+    matching:                   "normal";   /* plain text, not fuzzy */
+    tokenize:                   true;       /* space-separated tokens, order does not matter */
+    case-sensitive:             false;
+    sort:                       true;
+    sorting-method:             "normal";
+
+    /* --- appearance --- */
+    show-icons:                 true;
+    icon-theme:                 "Papirus-Dark";
+    display-drun:               " Apps";
+    drun-display-format:        "{name}";
+    terminal:                   "konsole";
+
+    /* --- behavior --- */
+    hover-select:               false;
+    click-to-exit:              true;
+    drun-match-fields:          "name,generic,exec,categories,keywords";
+    drun-show-actions:          false;
+
+    /* --- keys --- */
+    /* mode switching: Ctrl+Tab (rofi default) */
+    kb-cancel:                  "Escape,Control+bracketleft";
+    kb-row-up:                  "Up,Control+k";
+    kb-row-down:                "Down,Control+j";
+    kb-remove-to-eol:           "";
+    kb-accept-entry:            "Return,KP_Enter";
+}
+
+@theme "themes/iris"

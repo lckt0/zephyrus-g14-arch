@@ -1,0 +1,5 @@
+// Take the system rules as they are and add our own option on top.
+! include %S/evdev
+
+! option                =	symbols
+  custom:copilot        =	+copilot(f19)

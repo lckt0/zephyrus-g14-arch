@@ -1,0 +1,20 @@
+[Plymouth Theme]
+Name=Arch Logs
+Description=Arch logo on top, scrolling system log below; pure black background
+
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/arch-loglu/images
+ScriptFile=/usr/share/plymouth/themes/arch-loglu/arch-loglu.script
+
+# These two lines are read by the mkinitcpio plymouth install hook, which
+# copies the matching font files into the initramfs.
+Font=Noto Sans 10
+MonospaceFont=Monospace 11
+
+# Colours of the built-in console view (opened with Esc). Format 0xRRGGBBAA.
+# NOTE: if the top byte is 0, plymouth shifts the value left by 8 bits and adds
+# alpha=0xff, so 0x00000000 is OPAQUE BLACK (0x000000ff is not - it comes out blue).
+ConsoleLogBackgroundColor=0x00000000
+ConsoleLogTextColor=0x9a9a9aff

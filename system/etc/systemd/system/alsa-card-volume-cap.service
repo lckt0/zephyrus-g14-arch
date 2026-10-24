@@ -1,0 +1,13 @@
+[Unit]
+Description=Set max volume on the ALC285 card
+After=sound.target
+
+[Service]
+# Deliberately not Type=oneshot. The card only shows up a couple of seconds
+# into userspace, and waiting for it inside a oneshot held multi-user.target
+# back by the full 8s wait this unit used to hardcode.
+Type=simple
+ExecStart=/usr/local/bin/alc285-volume-cap
+
+[Install]
+WantedBy=multi-user.target

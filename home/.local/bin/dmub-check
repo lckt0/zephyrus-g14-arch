@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# "Has anything happened so far?" - for checking by hand. Changes nothing.
+set -uo pipefail
+
+SIG='Error waiting for DMUB idle: status=|Error querying DMUB hw power up status: error=|DMCUB error - collecting diagnostic data|No reply for DMUB command: status=|Error waiting for INBOX0 HW Lock Ack|hw_done or flip_done timed out|flip_done timed out|SMU response after wait'
+OUTDIR="${XDG_STATE_HOME:-$HOME/.local/state}/dmub-watch"
+
+printf 'Kernel  : %s\n' "$(uname -r)"
+printf 'Uptime  : %s\n' "$(uptime -p)"
+case "$(uname -r)" in
+    *lapidary*) printf 'Patch   : ACTIVE (all seven DMUB waits are bounded)\n' ;;
+    *)          printf 'Patch   : NOT PRESENT - a DMUB hang is still a hard freeze on this kernel\n' ;;
+esac
+printf 'Watcher : %s\n\n' "$(systemctl --user is-active dmub-watch.service 2>/dev/null)"
+
+total=0
+for b in 0 -1 -2 -3 -4; do
+    out=$(journalctl -k -b "$b" --no-pager 2>/dev/null | grep -E "$SIG") || true
+    [ -z "$out" ] && continue
+    n=$(printf '%s\n' "$out" | wc -l)
+    total=$((total + n))
+    printf '### boot %s - %s matches\n' "$b" "$n"
+    printf '%s\n\n' "$out"
+done
+
+if [ "$total" -eq 0 ]; then
+    printf 'No DMUB events in the last 5 boots.\n\n'
+    printf 'Note: no events does not prove the patch works - only that DMUB\n'
+    printf 'has not got stuck yet. Records: %s/\n' "$OUTDIR"
+else
+    printf 'TOTAL %s matches. Records:\n' "$total"
+    ls -1t "$OUTDIR"/dmub-event-*.txt 2>/dev/null | head -10
+fi

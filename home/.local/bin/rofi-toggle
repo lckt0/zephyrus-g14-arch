@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Rofi show/hide wrapper.
+#   - Pressing the same shortcut again closes the open rofi.
+#   - Pressing a different rofi shortcut closes the open one and opens the new mode.
+# Which mode is open is kept in a small file under ~/.cache.
+set -uo pipefail
+
+STATE="${XDG_CACHE_HOME:-$HOME/.cache}/rofi-toggle.mode"
+BIN="$HOME/.local/bin"
+case "${1:-drun}" in
+    drun)      mode=drun;      cmd=(/usr/bin/rofi -normal-window -show drun) ;;
+    clipboard) mode=clipboard; cmd=("$BIN/rofi-clipboard") ;;
+    power)     mode=power;     cmd=("$BIN/rofi-power") ;;
+    *) echo "usage: $(basename "$0") {drun|clipboard|power}" >&2; exit 2 ;;
+esac
+
+# If a rofi is open, close it. Same mode means we are done: it just closes.
+if pkill -x rofi 2>/dev/null; then
+    [[ "$(cat "$STATE" 2>/dev/null)" == "$mode" ]] && exit 0
+    # Different mode: wait briefly for the old instance to exit (1 s at most)
+    for _ in $(seq 20); do
+        pgrep -x rofi >/dev/null || break
+        sleep 0.05
+    done
+fi
+
+mkdir -p "$(dirname "$STATE")"
+printf '%s' "$mode" > "$STATE"
+
+# rofi is executed directly, NOT in its own systemd scope: an app launched
+# from drun is forked as rofi's child into the same cgroup, so killing the
+# scope on focus loss would kill the new app too. Close-on-focus-loss goes
+# through rofi-kill.service (pkill -x rofi), triggered by the rofi-autoclose
+# KWin script.
+exec "${cmd[@]}"

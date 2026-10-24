@@ -1,0 +1,50 @@
+From: lckt0 <lckt0@protonmail.com>
+Subject: [PATCH] drm/amd/display: add a minimum delay before static screen (PSR) entry
+
+On DCN 3.5 with a PSR1 eDP panel at 120 Hz, the ISM enters
+OPTIMIZED_IDLE_SSO (PSR allowed) after sso_num_frames = 11 frame-times,
+~92 ms. Every exit from self-refresh goes through
+amdgpu_dm_crtc_set_static_screen_optimze() -> psr_set_event(wait=true),
+which busy-waits in power_psr.c until PSR_STATE0, and the following
+commit waits for it: the first flip after a short pause takes 4-5 vblanks
+(34.5 / 42.8 ms measured with ftrace). This shows up as cursor stutter.
+
+Add a runtime-tunable lower bound (amdgpu.dm_sso_min_ms, default 250 ms)
+for the SSO delay. Idle optimizations (OPTIMIZED_IDLE) are unchanged;
+only PSR entry is deferred during interactive use. 0 restores the
+upstream behaviour.
+
+Local patch for ASUS G14 (GA403), not intended for upstream.
+---
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_ism.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_ism.c
+@@ -130,6 +130,20 @@
+ }
+ EXPORT_IF_KUNIT(dm_ism_next_state);
+ 
++/*
++ * linux-lapidary: lower bound for the static-screen-optimization (PSR/Replay
++ * entry) delay, in milliseconds. The upstream delay is sso_num_frames (11)
++ * frame-times, i.e. ~92 ms at 120 Hz. With PSR1, every exit from self-refresh
++ * blocks the next commit for 4-5 frames (power_psr.c waits for PSR_STATE0),
++ * which is visible as cursor stutter after short pauses. A longer entry delay
++ * keeps idle optimizations but avoids entering PSR during interactive use.
++ * 0 restores the upstream frame-based delay. Writable at runtime.
++ */
++static unsigned int dm_sso_min_ms = 250;
++module_param(dm_sso_min_ms, uint, 0644);
++MODULE_PARM_DESC(dm_sso_min_ms,
++		 "Minimum static screen (PSR entry) delay in ms (0 = upstream frame-based delay, default 250)");
++
+ STATIC_IFN_KUNIT
+ uint64_t dm_ism_get_sso_delay(const struct amdgpu_dm_ism *ism,
+ 				     const struct dc_stream_state *stream)
+@@ -150,6 +164,8 @@
+ 	one_frame_ns = div64_u64(v_total * h_total * 10000000ull,
+ 				 stream->timing.pix_clk_100hz);
+ 	sso_delay_ns = config->sso_num_frames * one_frame_ns;
++	sso_delay_ns = max_t(uint64_t, sso_delay_ns,
++			     (uint64_t)READ_ONCE(dm_sso_min_ms) * NSEC_PER_MSEC);
+ 
+ 	return sso_delay_ns;
+ }

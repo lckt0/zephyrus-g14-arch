@@ -1,0 +1,65 @@
+From: lckt0 <lckt0@protonmail.com>
+Subject: [PATCH] drm/amd/display: Pull in all non-cursor planes for VRR, not just primary
+
+Commit 3477c1b "drm/amd/display: Add primary plane to commits for correct
+VRR handling" pulls the primary plane into every non-legacy-cursor commit
+on a CRTC with VRR active. It does so from the CRTC helper atomic_check,
+i.e. after amdgpu_dm_atomic_check() has already added all planes of
+modified CRTCs.
+
+A commit that touches no primary/overlay plane of the CRTC (e.g. only the
+cursor plane, or only a disabled overlay plane) therefore ends up holding
+the primary plane and nothing else. amdgpu_dm_commit_planes() passes that
+as the surface list to dc_update_planes_and_stream(), and a full update
+replaces the stream's plane set with it: every enabled overlay plane is
+removed from the stream until a later commit touches it again.
+
+With KWin 6.7 on a DCN 3.5 APU this happens constantly when VRR is always
+on: KWin scans the wallpaper out on the primary plane and composites the
+rest of the desktop onto an overlay above it. Every cursor-motion commit
+drops the overlay, so all windows vanish while the pointer moves and come
+back when it stops. Traced: DC plane_count 2->1 for commits containing
+only {primary, disabled overlay, cursor}; MPCC tree reduced to one pipe.
+
+Pull in all non-cursor planes of the CRTC instead of only the primary one.
+
+Fixes: 3477c1b ("drm/amd/display: Add primary plane to commits for correct VRR handling")
+---
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crtc.c
++++ b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm_crtc.c
+@@ -673,12 +673,30 @@
+ 	}
+ 
+ 	if (!state->legacy_cursor_update && amdgpu_dm_crtc_vrr_active(dm_crtc_state)) {
+-		struct drm_plane_state *primary_state;
++		struct drm_plane_state *plane_state;
++		struct drm_plane *plane;
+ 
+-		/* Pull in primary plane for correct VRR handling */
+-		primary_state = drm_atomic_get_plane_state(state, crtc->primary);
+-		if (IS_ERR(primary_state))
+-			return PTR_ERR(primary_state);
++		/*
++		 * Pull in the primary plane for correct VRR handling, together
++		 * with all other non-cursor planes on the CRTC.
++		 *
++		 * This runs after amdgpu_dm_atomic_check() added all planes of
++		 * modified CRTCs, so pulling in only the primary plane leaves the
++		 * commit with a subset of the CRTC's planes. amdgpu_dm_commit_planes()
++		 * then hands DC a surface list containing just the primary plane,
++		 * and a full update replaces the stream's plane set with it:
++		 * overlay planes vanish until the next commit that touches them
++		 * (e.g. windows on an overlay above a primary-plane underlay
++		 * disappear while the cursor moves).
++		 */
++		drm_for_each_plane_mask(plane, crtc->dev, crtc_state->plane_mask) {
++			if (plane->type == DRM_PLANE_TYPE_CURSOR)
++				continue;
++
++			plane_state = drm_atomic_get_plane_state(state, plane);
++			if (IS_ERR(plane_state))
++				return PTR_ERR(plane_state);
++		}
+ 	}
+ 
+ 	/* In some use cases, like reset, no stream is attached */

@@ -1,0 +1,36 @@
+#!/bin/bash
+# Watches the active port of the ALC285 analog sink and re-applies the right
+# mixer state (alc285-audio-fix) whenever it changes between headphones and
+# speakers. On the G14 the speakers / bass speaker are not reliably unmuted
+# again after headphones are unplugged.
+#
+# The sink name contains the PCI address of the audio function (65:00.6 on the
+# GA403); check yours with: pactl list short sinks
+SINK="${ALC285_SINK:-alsa_output.pci-0000_65_00.6.analog-stereo}"
+FIX="$HOME/.local/bin/alc285-audio-fix"
+PREV_PORT=""
+
+get_active_port() {
+    pactl list sinks | grep -A 50 "$SINK" | grep 'Active Port' | awk '{print $3}'
+}
+
+apply() {
+    case "$1" in
+        analog-output-headphones) "$FIX" headphones ;;
+        analog-output-speaker)    "$FIX" speakers ;;
+    esac
+}
+
+# Sync once at startup instead of waiting for the first change event; if
+# nothing touches the sink after boot the watcher would otherwise do nothing
+# for the whole session.
+PREV_PORT=$(get_active_port)
+[[ -n "$PREV_PORT" ]] && apply "$PREV_PORT"
+
+pactl subscribe | grep --line-buffered "on sink #" | while read -r _; do
+    PORT=$(get_active_port)
+    if [[ -n "$PORT" && "$PORT" != "$PREV_PORT" ]]; then
+        PREV_PORT="$PORT"
+        apply "$PORT"
+    fi
+done

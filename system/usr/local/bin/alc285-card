@@ -1,0 +1,25 @@
+#!/bin/bash
+# Prints the ALSA card index of the ALC285 analog codec.
+#
+# The index is not stable. Disabling the dGPU removed its HDMI audio function,
+# which shifted every later card down by one and silently broke the hardcoded
+# "-c 2" this patch used to rely on. The PCI address does not move, so resolve
+# through that instead.
+#
+# Usage: alc285-card [seconds-to-wait]
+
+ALC285_PCI="${ALC285_PCI:-0000:65:00.6}"
+timeout="${1:-0}"
+deadline=$(( SECONDS + timeout ))
+
+while :; do
+    for path in /sys/class/sound/card[0-9]*; do
+        [[ -e $path ]] || continue
+        if [[ $(readlink -f "$path") == *"$ALC285_PCI"* ]]; then
+            echo "${path##*/card}"
+            exit 0
+        fi
+    done
+    (( SECONDS < deadline )) || exit 1
+    sleep 0.2
+done

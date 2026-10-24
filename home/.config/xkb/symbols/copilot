@@ -1,0 +1,21 @@
+// Copilot key (ASUS ROG): the firmware sends Shift+Super+F23.
+//
+// Stock xkeyboard-config defines <FK23> with type "PC_SHIFT_SUPER_LEVEL2" and
+// produces XF86Assistant on level 2. That caused two problems:
+//   1) Qt 6 does not know XF86Assistant, so the KDE shortcut dialog only shows
+//      "Meta+Shift" and the key cannot be bound.
+//   2) That type "consumes" Shift+Super to select level 2. The capture dialog
+//      saw the raw modifiers and stored Meta+Shift+F19, but KWin drops consumed
+//      modifiers when matching, so the shortcut never fired.
+//
+// Fix: make the key ONE_LEVEL so it always produces plain F19. No modifiers
+// are consumed and there is no level ambiguity; Shift+Super reach KWin as real
+// modifiers and the shortcut matches as Meta+Shift+F19.
+// The plain F23 meaning of this key is not used on this machine.
+partial function_keys
+xkb_symbols "f19" {
+    key <FK23> {
+        type[Group1] = "ONE_LEVEL",
+        symbols[Group1] = [ F19 ]
+    };
+};

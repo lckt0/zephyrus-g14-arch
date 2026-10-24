@@ -1,0 +1,45 @@
+From: lckt0 <lckt0@protonmail.com>
+Subject: [PATCH] compositor: repaint an output layer when it gets a new item
+
+When KWin's overlay-plane support is enabled (KWIN_USE_OVERLAYS=1, needed on
+amdgpu), Compositor::setupLayers() can move the scene (containerItem) to a
+different OutputLayer, for example when a notification or tray popup that had
+its own overlay plane closes. It only calls sceneView->setLayer(layer), and
+RenderView::setLayer() does not schedule a repaint. renderLayers() renders only
+layers that need a repaint, so the newly assigned layer is not rendered that
+frame and is presented with whatever buffer it held before (the closing popup),
+while the scene's previous layer is turned off. Result: windows and panels
+vanish for ~10 frames and only the wallpaper and the popup are visible.
+
+The same can happen when a new ItemView is put on an overlay layer.
+
+Schedule a full device repaint on the layer whenever its assignment changes.
+The cost is one full repaint on the (rare) frames where layers are reassigned.
+
+Tested on an ASUS ROG Zephyrus G14 (GA403GM, Radeon 880M / DCN 3.5) with
+KWin 6.8.0; kwin master and 6.8.1 still have the unpatched code path.
+---
+--- a/src/compositor.cpp
++++ b/src/compositor.cpp
+@@ -658,6 +658,12 @@
+         const bool isCursor = qobject_cast<CursorItem *>(item) != nullptr;
+         const bool isScene = item == kwinApp()->scene()->containerItem();
+         if (isScene) {
++            if (sceneView->layer() != layer) {
++                // the layer still holds the buffer of whatever was assigned to it before
++                // (for example a closing popup). Without a full repaint it isn't rendered
++                // this frame and that stale buffer gets presented as the whole scene
++                layer->addDeviceRepaint(Region::infinite());
++            }
+             sceneView->setLayer(layer);
+             underlay = false;
+             layers.push_back(LayerData{
+@@ -716,6 +722,8 @@
+             } else {
+                 view = std::make_unique<ItemView>(sceneView, item, logicalOutput, backendOutput, layer);
+             }
++            // same as for the scene: the layer may still show the previous item's buffer
++            layer->addDeviceRepaint(Region::infinite());
+         }
+         layers.push_back(LayerData{
+             .view = view.get(),

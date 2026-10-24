@@ -1,0 +1,1 @@
+splash nvidia_drm.modeset=1 root=/dev/mapper/root zswap.enabled=0 rootflags=subvol=@ rw rootfstype=btrfs drm.edid_firmware=eDP-1:edid/g14-hdr.bin loglevel=6 rcu_nocbs=all rcutree.enable_rcu_lazy=1

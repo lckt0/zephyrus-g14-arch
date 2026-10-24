@@ -1,0 +1,14 @@
+{
+    "KPlugin": {
+        "Name": "Rofi Autoclose",
+        "Description": "Closes rofi when it loses focus (another window becomes active)",
+        "Icon": "preferences-system-windows",
+        "Id": "rofi-autoclose",
+        "Version": "1.0",
+        "License": "MIT"
+    },
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js",
+    "X-Plasma-API-Minimum-Version": "6.1",
+    "KPackageStructure": "KWin/Script"
+}

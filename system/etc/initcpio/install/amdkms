@@ -1,0 +1,12 @@
+#!/bin/bash
+# Replacement for the stock "kms" mkinitcpio hook on this laptop.
+#
+# "kms" adds every GPU driver that matches hardware present on the bus. With the
+# dGPU visible it adds nouveau, and nouveau drags the complete NVIDIA GSP
+# firmware set into the early cpio (~146 MiB; the UKI grew from 95 MB to
+# 207 MB) even though nouveau is blacklisted and never loads.
+# This hook only adds amdgpu and its firmware. It does not force-load the
+# module (no MODULES=(amdgpu)), so udev still loads it in parallel with the
+# rest of early boot and early KMS/Plymouth work as before.
+build() { add_module amdgpu; }
+help() { echo "Adds the amdgpu driver and its firmware to the initramfs without force-loading it."; }
